@@ -28,7 +28,7 @@ event_topic = f"event/{supplier_sn}/{external_id}"        # Event topic
 robot_to_lcs_topic = f"robot_to_lcs/{supplier_sn}/{external_id}"
 lcs_to_robot_ack_topic = f"lcs_to_robot_ack/{supplier_sn}/{external_id}"
 
-# Global Variables with Locks
+# Global Variables
 full_status = 0
 cage_exist = 0
 clamp_status = "unclamped"
@@ -38,60 +38,47 @@ event_status = "off"
 clamp_bool = [0, 0, 0, 1]
 unclamp_bool = [0, 0, 1, 0]
 
-# Locks for thread-safe access to global variables
-full_status_lock = Lock()
-cage_exist_lock = Lock()
-clamp_status_lock = Lock()
-event_level_lock = Lock()
-event_status_lock = Lock()
-
 ################# ROS Topics Part ##############################
 
 # Function to reset cage_exist to 0 after 20 seconds
 def reset_clamp_status():
     global clamp_status
-    with clamp_status_lock:
-        clamp_status = "unclamped"
+    clamp_status = "unclamped"
     print("Reset cage_exist to 0 after 20 seconds")
 
 def reset_clamp_status_inbetween():
     global clamp_status
-    with clamp_status_lock:
-        clamp_status = "inbetween"
+    clamp_status = "inbetween"
 
 # ROS event callback functions
 def full_state_callback(data):
     global full_status
-    with full_status_lock:
-        full_status = 1 if data.data else 0
+    full_status = 1 if data.data else 0
     rospy.loginfo(f"Received ROS message from /lcs/full_state: {data.data}")
 
 def limit_switch_callback(data):
     global cage_exist
-    with cage_exist_lock:
-        cage_exist = 1 if data.data else 0
+    cage_exist = 1 if data.data else 0
     rospy.loginfo(f"Received ROS message from /lcs/state/ls: {data.data}")
 
 def solenoid_callback(data):
     global clamp_status
     int_data = data.data.astype(int)
     clamp_data = np.sum(int_data[-2])
-    with clamp_status_lock:
-        if clamp_data == 1 and cage_exist == 0:
-            clamp_status = "inbetween"
-        elif clamp_data == 0 and cage_exist == 1:
-            clamp_status = "clamped"
-        elif clamp_data == 0 and cage_exist == 0:
-            clamp_status = "unclamped"
-        else:
-            clamp_status = "error"
+    if clamp_data == 1 and cage_exist == 0:
+        clamp_status = "inbetween"
+    elif clamp_data == 0 and cage_exist == 1:
+        clamp_status = "clamped"
+    elif clamp_data == 0 and cage_exist == 0:
+        clamp_status = "unclamped"
+    else:
+        clamp_status = "error"
     rospy.loginfo(f"Received ROS message from /lcs/ctr/solenoid: {data.data}")
 
 def stuck_state_callback(data):
     global event_level, event_status
-    with event_level_lock, event_status_lock:
-        event_level = 2 if data.data else 0
-        event_status = "on" if data.data else "off"
+    event_level = 2 if data.data else 0
+    event_status = "on" if data.data else "off"
     rospy.loginfo(f"Received ROS message from /lcs/stuck_state: {data.data}")
 
 ################# MQTT bridge part ############################
@@ -115,15 +102,14 @@ def connect_mqtt():
 # LCS Tracking Data Publishing Function
 def LCS_tracking(client):
     current_time = time.time()
-    with full_status_lock, cage_exist_lock, clamp_status_lock:
-        data = {
-            "supplier_sn": supplier_sn,
-            "external_id": external_id,
-            "timestamp": current_time,
-            "full_status": full_staus,
-            "cage_exist": cage_exist,
-            "clamp_status": clamp_status
-        }
+    data = {
+        "supplier_sn": supplier_sn,
+        "external_id": external_id,
+        "timestamp": current_time,
+        "full_status": full_status,
+        "cage_exist": cage_exist,
+        "clamp_status": clamp_status
+    }
     msg = json.dumps(data)
     result = client.publish(tracking_topic, msg)  # Capture the publish result
     status = result[0]
@@ -136,19 +122,18 @@ def LCS_tracking(client):
 def LCS_event(client):
     global event_status, event_level
     current_time = time.time()
-    with event_level_lock, event_status_lock:
-        data = {
-            "supplier_sn": supplier_sn,
-            "timestamp": current_time,  # Added timestamp for event
-            "event": [
-                {
-                    "event_name": "Stuck",
-                    "event_value": "",
-                    "event_level": event_level,
-                    "event_status": event_status,
-                }
-            ]
-        }
+    data = {
+        "supplier_sn": supplier_sn,
+        "timestamp": current_time,  # Added timestamp for event
+        "event": [
+            {
+                "event_name": "Stuck",
+                "event_value": "",
+                "event_level": event_level,
+                "event_status": event_status,
+            }
+        ]
+    }
     msg = json.dumps(data)
     result = client.publish(event_topic, msg)  # Capture the publish result
     status = result[0]
