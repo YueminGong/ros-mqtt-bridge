@@ -58,12 +58,14 @@ def full_state_callback(data):
 
 def limit_switch_callback(data):
     global cage_exist
-    cage_exist = 1 if data.data else 0
-    rospy.loginfo(f"Received ROS message from /lcs/state/ls: {data.data}")
+    cage_exist_data = np.array(data.ls_states).astype(int)
+    cage_exist_en = cage_exist_data[-1]
+    cage_exist = 0 if cage_exist_en else 1             # check the confi
+    rospy.loginfo(f"Received ROS message from /lcs/state/ls: {data.ls_states}")
 
 def solenoid_callback(data):
     global clamp_status
-    int_data = data.data.astype(int)
+    int_data = np.array(data.solenoid_ctr).astype(int)
     clamp_data = np.sum(int_data[-2])
     if clamp_data == 1 and cage_exist == 0:
         clamp_status = "inbetween"
@@ -73,7 +75,7 @@ def solenoid_callback(data):
         clamp_status = "unclamped"
     else:
         clamp_status = "error"
-    rospy.loginfo(f"Received ROS message from /lcs/ctr/solenoid: {data.data}")
+    rospy.loginfo(f"Received ROS message from /lcs/ctr/solenoid: {data.solenoid_ctr}")
 
 def stuck_state_callback(data):
     global event_level, event_status
