@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import time
 import numpy as np
 import rospy
@@ -113,8 +114,17 @@ def LCS_tracking(client):
         "timestamp": current_time,
         "full_status": full_status,
         "cage_exist": cage_exist,
-        "clamp_status": clamp_status
-    }
+        "clamp_status": clamp_status,
+        "event": [
+            {
+                "event_name": "Stuck",
+                "event_value": "",
+                "event_level": event_level,
+                "event_status": event_status,
+            }
+        ]
+
+            }
     msg = json.dumps(data)
     result = client.publish(tracking_topic, msg)  # Capture the publish result
     status = result[0]
@@ -199,8 +209,8 @@ def run():
 
     try:
         while not rospy.is_shutdown():
-            LCS_tracking(client)
-            LCS_event(client)
+            LCS_tracking(client) 
+            #LCS_event(client) # lcs tracking includ event content
             time.sleep(3)
     except KeyboardInterrupt:
         print("Exiting program")
